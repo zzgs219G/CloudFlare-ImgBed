@@ -1,12 +1,10 @@
 /**
- * Cloudflare Workers 部署适配层（自动生成，请勿手动编辑）
- * 生成命令: node deploy/worker/generate-routes.js
- * 
- * 复用 functions/ 下的全部业务逻辑，不修改任何业务代码
- */
-
+* Cloudflare Workers 部署适配层（自动生成，请勿手动编辑）
+* 生成命令: node deploy/worker/generate-routes.js
+*
+* 复用 functions/ 下的全部业务逻辑，不修改任何业务代码
+*/
 // ==================== 自动生成的导入 ====================
-
 // --- 中间件（自动生成） ---
 import * as mw_api from '../../functions/api/_middleware.js';
 import * as mw_api_manage from '../../functions/api/manage/_middleware.js';
@@ -63,9 +61,7 @@ import * as apiManageWhiteCatchAll from '../../functions/api/manage/white/[[path
 import * as davCatchAll from '../../functions/dav/[[path]].js';
 import * as fileCatchAll from '../../functions/file/[[path]].js';
 
-
 // ==================== 自动生成的路由表 ====================
-
 const routes = [
     { path: '/api/manage/batch/index/chunk', module: apiManageBatchIndexChunk, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/batch/index/config', module: apiManageBatchIndexConfig, middlewares: [mw_api, mw_api_manage] },
@@ -114,231 +110,185 @@ const routes = [
     { path: '/dav/', module: davCatchAll, middlewares: [mw_dav], catchAll: true },
     { path: '/file/', module: fileCatchAll, middlewares: [mw_file], catchAll: true },
 ];
-
-
 // ==================== 路由匹配 ====================
-
 function matchRoute(pathname) {
-    for (const route of routes) {
-        if (route.catchAll) {
-            if (pathname.startsWith(route.path)) {
-                const rest = pathname.slice(route.path.length);
-                const pathParam = rest.split('/').filter(Boolean);
-                return { route, params: { path: pathParam } };
-            }
-        } else {
-            if (pathname === route.path || pathname === route.path + '/') {
-                return { route, params: {} };
-            }
-        }
+  for (const route of routes) {
+    if (route.catchAll) {
+      if (pathname.startsWith(route.path)) {
+        const rest = pathname.slice(route.path.length);
+        const pathParam = rest.split('/').filter(Boolean);
+        return { route, params: { path: pathParam } };
+      }
+    } else {
+      if (pathname === route.path || pathname === route.path + '/') {
+        return { route, params: {} };
+      }
     }
-    return null;
+  }
+  return null;
 }
-
-
 // ==================== 中间件链执行 ====================
-
 function collectMiddlewares(middlewareModules) {
-    const handlers = [];
-    for (const mod of middlewareModules) {
-        if (mod.onRequest) {
-            if (Array.isArray(mod.onRequest)) {
-                handlers.push(...mod.onRequest);
-            } else {
-                handlers.push(mod.onRequest);
-            }
-        }
+  const handlers = [];
+  for (const mod of middlewareModules) {
+    if (mod.onRequest) {
+      if (Array.isArray(mod.onRequest)) {
+        handlers.push(...mod.onRequest);
+      } else {
+        handlers.push(mod.onRequest);
+      }
     }
-    return handlers;
+  }
+  return handlers;
 }
-
 function createNextRequest(input, init, baseRequest) {
-    if (input instanceof Request) {
-        return init ? new Request(input, init) : input;
-    }
-
-    const url = new URL(input, baseRequest.url).toString();
-    return new Request(url, init);
+  if (input instanceof Request) {
+    return init ? new Request(input, init) : input;
+  }
+  const url = new URL(input, baseRequest.url).toString();
+  return new Request(url, init);
 }
-
 async function executeChain(middlewares, handler, context) {
-    const chain = [...middlewares, handler];
-    let index = 0;
-    context.next = async function (input, init) {
-        if (input !== undefined) {
-            context.request = createNextRequest(input, init, context.request);
-        }
-
-        if (index < chain.length) {
-            return await chain[index++](context);
-        }
-        return new Response('Not Found', { status: 404 });
-    };
-    return await context.next();
+  const chain = [...middlewares, handler];
+  let index = 0;
+  context.next = async function (input, init) {
+    if (input !== undefined) {
+      context.request = createNextRequest(input, init, context.request);
+    }
+    if (index < chain.length) {
+      return await chain[index++](context);
+    }
+    return new Response('Not Found', { status: 404 });
+  };
+  return await context.next();
 }
-
-
 // ==================== Worker Cache ====================
-
-// 统一缓存键，HEAD 与 GET 共用完整 GET 响应缓存
+// 修正 1: 隔离浏览器的 Accept/Cache-Control 标头，保证缓存 Key 干净一致
 function createCacheKeyRequest(request) {
-    return new Request(request.url, {
-        method: 'GET',
-        headers: request.headers,
-    });
+  return new Request(request.url, {
+    method: 'GET',
+  });
 }
-
-// 解析 Cache-Control 指令，支持 max-age/s-maxage 等数值字段
 function parseCacheDirective(cacheControl, directive) {
-    if (!cacheControl) return null;
-
-    const directives = cacheControl.split(',');
-    for (const rawDirective of directives) {
-        const part = rawDirective.trim();
-        const eqIndex = part.indexOf('=');
-        const name = (eqIndex === -1 ? part : part.slice(0, eqIndex)).trim().toLowerCase();
-
-        if (name !== directive) continue;
-        if (eqIndex === -1) return true;
-
-        const value = part.slice(eqIndex + 1).trim().replace(/^"|"$/g, '');
-        const seconds = Number.parseInt(value, 10);
-        return Number.isFinite(seconds) ? seconds : null;
-    }
-
-    return null;
+  if (!cacheControl) return null;
+  const directives = cacheControl.split(',');
+  for (const rawDirective of directives) {
+    const part = rawDirective.trim();
+    const eqIndex = part.indexOf('=');
+    const name = (eqIndex === -1 ? part : part.slice(0, eqIndex)).trim().toLowerCase();
+    if (name !== directive) continue;
+    if (eqIndex === -1) return true;
+    const value = part.slice(eqIndex + 1).trim().replace(/^"|"$/g, '');
+    const seconds = Number.parseInt(value, 10);
+    return Number.isFinite(seconds) ? seconds : null;
+  }
+  return null;
 }
-
 function responseHasCacheDirective(cacheControl, directive) {
-    return parseCacheDirective(cacheControl, directive) !== null;
+  return parseCacheDirective(cacheControl, directive) !== null;
 }
-
 function getResponseCacheTtl(response) {
-    const cacheControl = response.headers.get('Cache-Control') || '';
-    const sMaxAge = parseCacheDirective(cacheControl, 's-maxage');
-    if (typeof sMaxAge === 'number') return sMaxAge;
-
-    const maxAge = parseCacheDirective(cacheControl, 'max-age');
-    if (typeof maxAge === 'number') return maxAge;
-
-    return null;
+  const cacheControl = response.headers.get('Cache-Control') || '';
+  const sMaxAge = parseCacheDirective(cacheControl, 's-maxage');
+  if (typeof sMaxAge === 'number') return sMaxAge;
+  const maxAge = parseCacheDirective(cacheControl, 'max-age');
+  if (typeof maxAge === 'number') return maxAge;
+  return null;
 }
-
 function isCacheLookupRequest(request) {
-    return request.method === 'GET' || request.method === 'HEAD';
+  return request.method === 'GET' || request.method === 'HEAD';
 }
-
-// 只写入完整 GET 响应，Range 请求仅尝试命中已有完整缓存
 function isCacheStoreRequest(request) {
-    return request.method === 'GET' && !request.headers.has('Range');
+  return request.method === 'GET' && !request.headers.has('Range');
 }
-
 function isCacheableResponse(request, response) {
-    if (!isCacheStoreRequest(request)) return false;
-    if (response.status !== 200) return false;
-    if (response.headers.has('Set-Cookie')) return false;
+  if (!isCacheStoreRequest(request)) return false;
+  if (response.status !== 200 && response.status !== 206) return false;
 
-    const cacheControl = response.headers.get('Cache-Control') || '';
-    if (!responseHasCacheDirective(cacheControl, 'public')) return false;
-    if (responseHasCacheDirective(cacheControl, 'private')) return false;
-    if (responseHasCacheDirective(cacheControl, 'no-store')) return false;
-    if (responseHasCacheDirective(cacheControl, 'no-cache')) return false;
+  // 修正 2: 如果返回的内容是网页 HTML（即 SPA 404 兜底），坚决不写入缓存
+  const contentType = response.headers.get('Content-Type') || '';
+  if (contentType.includes('text/html')) return false;
 
-    const ttl = getResponseCacheTtl(response);
-    return ttl !== null && ttl > 0;
+  if (response.headers.has('Set-Cookie')) return false;
+  const cacheControl = response.headers.get('Cache-Control') || '';
+  if (!responseHasCacheDirective(cacheControl, 'public')) return false;
+  if (responseHasCacheDirective(cacheControl, 'private')) return false;
+  if (responseHasCacheDirective(cacheControl, 'no-store')) return false;
+  if (responseHasCacheDirective(cacheControl, 'no-cache')) return false;
+  const ttl = getResponseCacheTtl(response);
+  return ttl !== null && ttl > 0;
 }
-
 function responseFromHeadCache(cachedResponse) {
-    return new Response(null, {
-        status: cachedResponse.status,
-        statusText: cachedResponse.statusText,
-        headers: cachedResponse.headers,
-    });
+  return new Response(null, {
+    status: cachedResponse.status,
+    statusText: cachedResponse.statusText,
+    headers: cachedResponse.headers,
+  });
 }
-
 async function maybeServeFromCache(request, ctx, producer) {
-    if (!isCacheLookupRequest(request)) {
-        return await producer();
-    }
-
-    const cache = caches.default;
-    const cacheKey = createCacheKeyRequest(request);
-    const cachedResponse = await cache.match(cacheKey);
-
-    if (cachedResponse) {
-        return request.method === 'HEAD'
-            ? responseFromHeadCache(cachedResponse)
-            : cachedResponse;
-    }
-
-    const response = await producer();
-
-    // 按业务代码返回的 Cache-Control 决定是否写入 Worker Cache
-    if (isCacheableResponse(request, response)) {
-        ctx.waitUntil(cache.put(cacheKey, response.clone()).catch(error => {
-            console.warn('Failed to store response in Worker cache:', error.message);
-        }));
-    }
-
-    return response;
+  if (!isCacheLookupRequest(request)) {
+    return await producer();
+  }
+  const cache = caches.default;
+  const cacheKey = createCacheKeyRequest(request);
+  const cachedResponse = await cache.match(cacheKey);
+  if (cachedResponse) {
+    return request.method === 'HEAD'
+      ? responseFromHeadCache(cachedResponse)
+      : cachedResponse;
+  }
+  const response = await producer();
+  if (isCacheableResponse(request, response)) {
+    ctx.waitUntil(cache.put(cacheKey, response.clone()).catch(error => {
+      console.warn('Failed to store response in Worker cache:', error.message);
+    }));
+  }
+  return response;
 }
-
-
 // ==================== Worker 入口 ====================
-
 export default {
-    async fetch(request, env, ctx) {
-        const url = new URL(request.url);
-        const pathname = url.pathname;
-
-        const matched = matchRoute(pathname);
-
-        if (!matched) {
-            if (env.ASSETS) {
-                return env.ASSETS.fetch(request);
-            }
-            return new Response('Not Found', { status: 404 });
-        }
-
-        const { route, params } = matched;
-        const mod = route.module;
-
-        const method = request.method.toUpperCase();
-        const methodHandlerName = 'onRequest' + method.charAt(0) + method.slice(1).toLowerCase();
-
-        let handler = null;
-        if (typeof mod[methodHandlerName] === 'function') {
-            handler = mod[methodHandlerName];
-        } else if (mod.onRequest) {
-            handler = typeof mod.onRequest === 'function'
-                ? mod.onRequest
-                : mod.onRequest[mod.onRequest.length - 1];
-        }
-
-        if (!handler) {
-            return new Response('Method Not Allowed', { status: 405 });
-        }
-
-        const middlewares = collectMiddlewares(route.middlewares);
-
-        if (Array.isArray(mod.onRequest) && mod.onRequest.length > 1 &&
-            handler === mod.onRequest[mod.onRequest.length - 1]) {
-            middlewares.push(...mod.onRequest.slice(0, -1));
-        }
-
-        const context = {
-            request,
-            env,
-            params,
-            functionPath: route.path.endsWith('/') && route.path !== '/'
-                ? route.path.slice(0, -1)
-                : route.path,
-            waitUntil: ctx.waitUntil.bind(ctx),
-            passThroughOnException: () => {},
-            next: null,
-            data: {},
-        };
-
-        return await maybeServeFromCache(request, ctx, () => executeChain(middlewares, handler, context));
-    },
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    const matched = matchRoute(pathname);
+    if (!matched) {
+      if (env.ASSETS) {
+        return env.ASSETS.fetch(request);
+      }
+      return new Response('Not Found', { status: 404 });
+    }
+    const { route, params } = matched;
+    const mod = route.module;
+    const method = request.method.toUpperCase();
+    const methodHandlerName = 'onRequest' + method.charAt(0) + method.slice(1).toLowerCase();
+    let handler = null;
+    if (typeof mod[methodHandlerName] === 'function') {
+      handler = mod[methodHandlerName];
+    } else if (mod.onRequest) {
+      handler = typeof mod.onRequest === 'function'
+        ? mod.onRequest
+        : mod.onRequest[mod.onRequest.length - 1];
+    }
+    if (!handler) {
+      return new Response('Method Not Allowed', { status: 405 });
+    }
+    const middlewares = collectMiddlewares(route.middlewares);
+    if (Array.isArray(mod.onRequest) && mod.onRequest.length > 1 &&
+        handler === mod.onRequest[mod.onRequest.length - 1]) {
+      middlewares.push(...mod.onRequest.slice(0, -1));
+    }
+    const context = {
+      request,
+      env,
+      params,
+      functionPath: route.path.endsWith('/') && route.path !== '/'
+        ? route.path.slice(0, -1)
+        : route.path,
+      waitUntil: ctx.waitUntil.bind(ctx),
+      passThroughOnException: () => {},
+      next: null,
+      data: {},
+    };
+    return await maybeServeFromCache(request, ctx, () => executeChain(middlewares, handler, context));
+  },
 };
