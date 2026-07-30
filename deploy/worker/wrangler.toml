@@ -29,7 +29,7 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "img_d1"
 database_name = "img_d1"
-#database_id = "b01a74ca-2c28-4834-b03e-f2a2776929ed"
+database_id = "b01a74ca-2c28-4834-b03e-f2a2776929ed"
 
 [[r2_buckets]]
 binding = "img_r2"
