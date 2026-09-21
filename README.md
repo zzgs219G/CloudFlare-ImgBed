@@ -21,6 +21,7 @@
 
 ---
 
+
 > [!IMPORTANT]
 >
 > **If you encounter issues, please check the [announcement](https://github.com/MarSeventh/CloudFlare-ImgBed/discussions/categories/announcements) first. Important notifications and non-compatible updates will be explained in the announcement!**
