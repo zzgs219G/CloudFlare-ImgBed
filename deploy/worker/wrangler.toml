@@ -12,7 +12,7 @@
 
 name = "cloudflare-imgbed"
 main = "index.js"
-compatibility_date = "2024-08-21"
+compatibility_date = "2026-09-21"
 # 让 Worker 对自身 zone 的 fetch() 走公网入口，不要直连 origin。
 compatibility_flags = ["global_fetch_strictly_public"]
 
@@ -30,10 +30,10 @@ binding = "IMAGES"
 # TG_BOT_TOKEN = ""
 # TG_CHAT_ID = ""
 
-# [[d1_databases]]
-# binding = "img_d1"
-# database_name = "img_d1"
-# database_id = ""
+[[d1_databases]]
+binding = "D1_DATABASE_ID"
+database_name = "img_d1"
+database_id = "b01a74ca-2c28-4834-b03e-f2a2776929ed"
 
 # [[r2_buckets]]
 # binding = "img_r2"
