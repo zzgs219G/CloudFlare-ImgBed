@@ -31,7 +31,7 @@ binding = "IMAGES"
 # TG_CHAT_ID = ""
 
 [[d1_databases]]
-binding = "D1_DATABASE_ID"
+binding = "img_d1"
 database_name = "img_d1"
 database_id = "b01a74ca-2c28-4834-b03e-f2a2776929ed"
 
