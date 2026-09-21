@@ -26,6 +26,7 @@ export async function buildFileMetadataForManagement(db, env, metadata = {}, vie
   enrichS3Metadata(context, metadata, view);
   enrichHuggingFaceMetadata(context, metadata, view);
   enrichWebDAVMetadata(context, metadata, view);
+  enrichCnbMetadata(context, metadata, view);
 
   return view;
 }
@@ -100,6 +101,14 @@ function enrichWebDAVMetadata(context, sourceMetadata, view) {
     }
   } catch (error) {
     console.warn('Failed to enrich WebDAV metadata:', error.message);
+  }
+}
+
+// CNB 渠道：把存储时记录的国内直链透出给管理端（用于复制链接）
+function enrichCnbMetadata(context, sourceMetadata, view) {
+  if (sourceMetadata?.Channel !== 'CNB') return;
+  if (sourceMetadata.CnbUrl) {
+    view.CnbUrl = sourceMetadata.CnbUrl;
   }
 }
 

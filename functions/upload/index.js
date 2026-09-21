@@ -610,7 +610,8 @@ async function uploadFileToCnb(context, fullId, metadata, returnLink) {
         // 结束上传
         waitUntil(endUpload(context, fullId, metadata));
 
-        return buildUploadResponse(context, returnLink);
+        // CNB 渠道直接返回国内直链(不经过 Cloudflare /file/ 路由)
+        return buildUploadResponse(context, cnbChannel.returnUrl === false ? returnLink : result.url);
     } catch (error) {
         console.log('CNB upload error:', error.message);
         return createResponse('Error: CNB upload failed - ' + error.message, { status: 500 });
