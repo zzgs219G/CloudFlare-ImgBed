@@ -11,7 +11,7 @@ import { TelegramAPI } from "../utils/storage/telegramAPI";
 import { DiscordAPI } from "../utils/storage/discordAPI";
 import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
 import { WebDAVAPI } from "../utils/storage/webdavAPI";
-import { uploadImageToCnb } from "../utils/storage/cnbAPI";
+import { uploadImageToCnb, uploadFileToCnb, deleteImageFromCnb } from "../utils/storage/cnbAPI";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 
@@ -587,14 +587,19 @@ async function uploadFileToCnb(context, fullId, metadata, returnLink) {
     }
 
     const file = formdata.get('file');
+    const fileContent = new Uint8Array(await file.arrayBuffer());
+    const contentType = metadata.FileType || file.type || 'application/octet-stream';
+    const isImage = contentType.startsWith('image/');
 
     try {
-        const result = await uploadImageToCnb({
+        // 根据文件类型选择上传接口：图片走 /upload/imgs，其他走 /upload/files
+        const uploadFn = isImage ? uploadImageToCnb : uploadFileToCnb;
+        const result = await uploadFn({
             repoUrl: cnbRepo,
             token: cnbToken,
             fileName: metadata.FileName,
-            content: new Uint8Array(await file.arrayBuffer()),
-            contentType: metadata.FileType || 'application/octet-stream',
+            content: fileContent,
+            contentType: contentType,
         });
 
         metadata.Channel = "CNB";

@@ -302,10 +302,12 @@ async function deleteWebDAVFile(env, img) {
     }
 }
 
-// 删除 CNB 渠道的图片
+// 删除 CNB 渠道的文件/图片
 async function deleteCnbFile(env, img) {
     const filePath = img.metadata?.CnbFilePath;
     const channelName = img.metadata?.ChannelName;
+    const fileType = img.metadata?.FileType || '';
+    const isImage = fileType.startsWith('image/');
 
     if (!filePath) {
         console.warn('CNB file missing CnbFilePath metadata for deletion');
@@ -341,8 +343,10 @@ async function deleteCnbFile(env, img) {
             return false;
         }
 
-        const { deleteImageFromCnb } = await import('../../../utils/storage/cnbAPI.js');
-        return await deleteImageFromCnb({
+        const { deleteImageFromCnb, deleteFileFromCnb } = await import('../../../utils/storage/cnbAPI.js');
+        // 根据文件类型选择删除接口
+        const deleteFn = isImage ? deleteImageFromCnb : deleteFileFromCnb;
+        return await deleteFn({
             repoUrl: cnbRepo,
             token: cnbToken,
             filePath: filePath,

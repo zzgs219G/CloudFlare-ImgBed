@@ -32,7 +32,64 @@ function repoOrigin(repoUrl) {
 }
 
 /**
- * 上传图片到 CNB
+ * 上传文件到 CNB（通用文件接口）
+ * @param {Object} opts
+ * @param {string} opts.repoUrl - CNB_REPO 环境变量
+ * @param {string} opts.token - CNB_TOKEN 环境变量
+ * @param {string} opts.fileName - 原始文件名
+ * @param {Uint8Array} opts.content - 文件二进制
+ * @param {string} opts.contentType - MIME 类型
+ * @returns {Promise<{url: string, name: string, size: number, path: string}>}
+ */
+export async function uploadFileToCnb(opts) {
+    const slug = repoSlug(opts.repoUrl);
+
+    // ① 申请预签名上传地址（通用文件接口）
+    const applyResp = await fetch(`https://api.cnb.cool/${slug}/-/upload/files`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${opts.token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ name: opts.fileName, size: opts.content.byteLength }),
+    });
+    if (!applyResp.ok) {
+        const text = await applyResp.text().catch(() => '');
+        throw new Error(`CNB 申请上传地址失败(HTTP ${applyResp.status})${text.slice(0, 200)}`);
+    }
+    const apply = await applyResp.json();
+
+    // ② 用预签名地址流式上传二进制
+    const putResp = await fetch(apply.upload_url, {
+        method: 'PUT',
+        headers: {
+            ...(apply.form ?? {}),
+            'Content-Type': opts.contentType,
+        },
+        body: opts.content,
+    });
+    if (!putResp.ok) {
+        const text = await putResp.text().catch(() => '');
+        throw new Error(`CNB 上传文件失败(HTTP ${putResp.status})${text.slice(0, 200)}`);
+    }
+
+    // ③ 拼公开 URL
+    const path = apply.assets?.path;
+    if (!path) throw new Error('CNB 返回缺少 assets.path');
+    const slugPrefix = `/${slug}/`;
+    const base = path.startsWith(slugPrefix) ? repoOrigin(opts.repoUrl) : repoPage(opts.repoUrl);
+    const storedName = path.split('/').pop() || opts.fileName;
+    return {
+        url: `${base}${path}`,
+        name: storedName,
+        size: opts.content.byteLength,
+        path,
+    };
+}
+
+/**
+ * 上传图片到 CNB（图片专用接口，可能有压缩/缩略图等优化）
  * @param {Object} opts
  * @param {string} opts.repoUrl - CNB_REPO 环境变量
  * @param {string} opts.token - CNB_TOKEN 环境变量
@@ -45,7 +102,7 @@ function repoOrigin(repoUrl) {
 export async function uploadImageToCnb(opts) {
     const slug = repoSlug(opts.repoUrl);
 
-    // ① 申请预签名上传地址
+    // ① 申请预签名上传地址（图片专用接口）
     const applyResp = await fetch(`https://api.cnb.cool/${slug}/-/upload/imgs`, {
         method: 'POST',
         headers: {
