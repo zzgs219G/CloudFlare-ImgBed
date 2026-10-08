@@ -169,9 +169,13 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
             await deleteWebDAVFile(env, img);
         }
 
-        // CNB 渠道的图片，需要删除 CNB 中对应的图片
+        // CNB 渠道的文件/图片，需要删除 CNB 中对应的文件
         if (img.metadata?.Channel === 'CNB') {
-            await deleteCnbFile(env, img);
+            const cnbDeleted = await deleteCnbFile(env, img);
+            if (!cnbDeleted) {
+                console.error('CNB delete failed, aborting database deletion to prevent data inconsistency');
+                return false;
+            }
         }
 
         // 删除数据库中的记录
@@ -310,7 +314,7 @@ async function deleteCnbFile(env, img) {
     const isImage = fileType.startsWith('image/');
 
     if (!filePath) {
-        console.warn('CNB file missing CnbFilePath metadata for deletion');
+        console.warn('CNB file missing CnbFilePath metadata for deletion', { fileId: img.metadata?.FileName });
         return false;
     }
 
@@ -346,13 +350,20 @@ async function deleteCnbFile(env, img) {
         const { deleteImageFromCnb, deleteFileFromCnb } = await import('../../../utils/storage/cnbAPI.js');
         // 根据文件类型选择删除接口
         const deleteFn = isImage ? deleteImageFromCnb : deleteFileFromCnb;
-        return await deleteFn({
+        const result = await deleteFn({
             repoUrl: cnbRepo,
             token: cnbToken,
             filePath: filePath,
         });
+        
+        if (result) {
+            console.log(`CNB delete success: ${filePath} (${isImage ? 'image' : 'file'} endpoint)`);
+        } else {
+            console.error(`CNB delete returned false: ${filePath}`);
+        }
+        return result;
     } catch (error) {
-        console.error("CNB Delete Failed:", error);
+        console.error("CNB Delete Failed:", error.message, { filePath, isImage });
         return false;
     }
 }
