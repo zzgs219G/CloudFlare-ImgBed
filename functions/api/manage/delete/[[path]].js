@@ -320,19 +320,19 @@ async function deleteCnbFile(env, img) {
 
     try {
         const db = getDatabase(env);
-        const settingsKV = await db.get('settings');
+        const settingsKV = await db.get('manage@sysConfig@upload');
         
         // 优先使用网页后台配置的 CNB 渠道（与上传逻辑一致）
         let cnbToken = null;
         let cnbRepo = null;
         
-        if (settingsKV?.value?.cnb?.channels && settingsKV.value.cnb.channels.length > 0) {
+        if (settingsKV?.cnb?.channels && settingsKV.cnb.channels.length > 0) {
             let cnbChannel;
             if (channelName) {
-                cnbChannel = settingsKV.value.cnb.channels.find(ch => ch.name === channelName);
+                cnbChannel = settingsKV.cnb.channels.find(ch => ch.name === channelName);
             }
             if (!cnbChannel) {
-                cnbChannel = settingsKV.value.cnb.channels[0];
+                cnbChannel = settingsKV.cnb.channels[0];
             }
             cnbToken = cnbChannel?.token;
             cnbRepo = cnbChannel?.repoUrl;
