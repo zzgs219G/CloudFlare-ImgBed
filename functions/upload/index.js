@@ -589,10 +589,16 @@ async function uploadFileToCnb(context, fullId, metadata, returnLink) {
     const file = formdata.get('file');
     const fileContent = new Uint8Array(await file.arrayBuffer());
     const contentType = metadata.FileType || file.type || 'application/octet-stream';
-    const isImage = contentType.startsWith('image/');
+    const isImageAuto = contentType.startsWith('image/');
+
+    // 读取渠道配置的 uploadMode（auto | image | file），默认 auto
+    const uploadMode = cnbChannel?.uploadMode || 'auto';
+    let isImage = isImageAuto;
+    if (uploadMode === 'image') isImage = true;
+    else if (uploadMode === 'file') isImage = false;
 
     try {
-        // 根据文件类型选择上传接口：图片走 /upload/imgs，其他走 /upload/files
+        // 根据文件类型/配置选择上传接口：图片走 /upload/imgs，其他走 /upload/files
         const uploadFn = isImage ? uploadImageToCnb : uploadFileToCnb;
         const result = await uploadFn({
             repoUrl: cnbRepo,

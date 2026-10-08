@@ -324,6 +324,8 @@ export async function getUploadConfig(db, env) {
     for (const cb of settingsKV.cnb?.channels || []) {
         // id自增
         cb.id = cnbChannels.length + 1
+        // uploadMode: 'auto' | 'image' | 'file'，默认 auto
+        cb.uploadMode = cb.uploadMode || 'auto'
         cnbChannels.push(cb)
     }
 

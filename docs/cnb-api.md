@@ -19,13 +19,25 @@
 |--------|------|--------|
 | `CNB_TOKEN` | CNB 访问令牌 | 环境变量兜底 |
 | `CNB_REPO` | 仓库 Git 地址，如 `https://cnb.cool/user/repo.git` | 环境变量兜底 |
-| 后台配置 | 网页后台 → 系统配置 → 上传渠道 → CNB，可配置多个渠道（token/repo/name/returnUrl） | **优先使用** |
+| 后台配置 | 网页后台 → 系统配置 → 上传渠道 → CNB，可配置多个渠道（token/repo/name/returnUrl/**uploadMode**） | **优先使用** |
 
 > 代码中统一逻辑：**优先读后台配置的渠道，回退环境变量**
 
+### CNB 渠道配置项
+
+每个 CNB 渠道支持以下字段：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `name` | string | 必填 | 渠道显示名称 |
+| `token` | string | 必填 | CNB Token |
+| `repoUrl` | string | 必填 | 仓库 Git 地址 |
+| `returnUrl` | boolean | `true` | `false` 时返回 `/file/` 链接而非直链 |
+| `uploadMode` | string | `'auto'` | **上传模式**：`'auto'` 自动识别、`'image'` 强制走图片接口、`'file'` 强制走文件接口 |
+
 ---
 
-## 上传接口（自动按文件类型分发）
+## 上传接口（自动按文件类型分发 + 可手动指定模式）
 
 ### 两个上传端点
 
@@ -83,6 +95,26 @@ metadata.CnbFilePath = "zzgs219/cdn-img/uuid.webp";  // assets.path，用于删�
 metadata.CnbUrl = "https://cnb.cool/zzgs219/cdn-img/...";  // 公开直链
 metadata.FileType = "image/webp";  // 原始 MIME 类型，用于删除时选接口
 ```
+
+### 上传模式判断逻辑（`uploadMode`）
+
+```javascript
+// 优先级：渠道配置 uploadMode > 自动识别
+const isImageAuto = contentType.startsWith('image/');  // 自动识别
+let isImage = isImageAuto;
+
+if (uploadMode === 'image') isImage = true;      // 强制图片接口
+else if (uploadMode === 'file') isImage = false; // 强制文件接口
+// 'auto' 时保持自动识别结果
+```
+
+| `uploadMode` | 行为 | 适用场景 |
+|--------------|------|----------|
+| `'auto'` (默认) | 按 MIME `image/*` 自动判断 | 绝大多数情况 |
+| `'image'` | 强制走 `/upload/imgs` | 想让非图片也享受图片优化（如压缩） |
+| `'file'` | 强制走 `/upload/files` | 传图片但想当文件存、避免被压缩 |
+
+> 前端后台配置 CNB 渠道时，可在渠道设置里看到 `uploadMode` 下拉选项（自动/图片/文件），默认 `自动`。
 
 ---
 
