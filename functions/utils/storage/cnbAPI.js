@@ -148,17 +148,43 @@ export async function uploadImageToCnb(opts) {
 }
 
 /**
+ * 从上传返回的 assets.path 提取删除接口所需的相对路径
+ * CNB 删除接口要求传「访问链接中 /-/imgs/ 或 /-/files/ 之后的部分」
+ * 参考: https://api.cnb.cool swagger - DeleteRepoImgs / DeleteRepoFiles
+ *   示例: 链接 https://cnb.cool/{repo}/-/imgs/abc/123.png → imgPath = abc/123.png
+ * assets.path 形如 `{repo}/abc/123.png`（含 repo 前缀），需去掉
+ */
+function extractDeletePath(fullPath, slug) {
+    let p = (fullPath || '').replace(/^\/+/, '');
+    // 已含 /-/imgs/ 或 /-/files/ 标记 → 取标记之后的部分
+    for (const marker of ['/-/imgs/', '/-/files/']) {
+        const idx = p.indexOf(marker);
+        if (idx !== -1) return p.slice(idx + marker.length);
+    }
+    // 否则去掉 repo slug 前缀（org/repo）
+    const prefix = `${slug}/`;
+    if (p.startsWith(prefix)) return p.slice(prefix.length);
+    return p;
+}
+
+/** 按路径段编码（保留 / 分隔符，encodeURIComponent 会把 / 也编码掉） */
+function encodeAssetPath(p) {
+    return p.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
  * 从 CNB 删除图片
  * @param {Object} opts
  * @param {string} opts.repoUrl - CNB_REPO 环境变量
- * @param {string} opts.token - CNB_TOKEN 环境变量
+ * @param {string} opts.token - CNB_TOKEN 环境变量（需 repo-manage:rw 权限）
  * @param {string} opts.filePath - CNB 存储路径 (metadata.CnbFilePath)
  * @returns {Promise<boolean>} 删除是否成功
  */
 export async function deleteImageFromCnb(opts) {
     const slug = repoSlug(opts.repoUrl);
-    // 使用删除图片接口: DELETE /{repo}/-/imgs/{imgPath}
-    const deleteUrl = `https://api.cnb.cool/${slug}/-/imgs/${encodeURIComponent(opts.filePath)}`;
+    const imgPath = extractDeletePath(opts.filePath, slug);
+    // 删除接口: DELETE /{repo}/-/imgs/{imgPath}
+    const deleteUrl = `https://api.cnb.cool/${slug}/-/imgs/${encodeAssetPath(imgPath)}`;
     
     const resp = await fetch(deleteUrl, {
         method: 'DELETE',
@@ -180,14 +206,15 @@ export async function deleteImageFromCnb(opts) {
  * 从 CNB 删除文件(通用文件)
  * @param {Object} opts
  * @param {string} opts.repoUrl - CNB_REPO 环境变量
- * @param {string} opts.token - CNB_TOKEN 环境变量
+ * @param {string} opts.token - CNB_TOKEN 环境变量（需 repo-manage:rw 权限）
  * @param {string} opts.filePath - CNB 存储路径
  * @returns {Promise<boolean>} 删除是否成功
  */
 export async function deleteFileFromCnb(opts) {
     const slug = repoSlug(opts.repoUrl);
-    // 使用删除文件接口: DELETE /{repo}/-/files/{filePath}
-    const deleteUrl = `https://api.cnb.cool/${slug}/-/files/${encodeURIComponent(opts.filePath)}`;
+    const filePath = extractDeletePath(opts.filePath, slug);
+    // 删除接口: DELETE /{repo}/-/files/{filePath}
+    const deleteUrl = `https://api.cnb.cool/${slug}/-/files/${encodeAssetPath(filePath)}`;
     
     const resp = await fetch(deleteUrl, {
         method: 'DELETE',
