@@ -89,3 +89,61 @@ export async function uploadImageToCnb(opts) {
         path,
     };
 }
+
+/**
+ * 从 CNB 删除图片
+ * @param {Object} opts
+ * @param {string} opts.repoUrl - CNB_REPO 环境变量
+ * @param {string} opts.token - CNB_TOKEN 环境变量
+ * @param {string} opts.filePath - CNB 存储路径 (metadata.CnbFilePath)
+ * @returns {Promise<boolean>} 删除是否成功
+ */
+export async function deleteImageFromCnb(opts) {
+    const slug = repoSlug(opts.repoUrl);
+    // 使用删除图片接口: DELETE /{repo}/-/imgs/{imgPath}
+    const deleteUrl = `https://api.cnb.cool/${slug}/-/imgs/${encodeURIComponent(opts.filePath)}`;
+    
+    const resp = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: {
+            Authorization: `Bearer ${opts.token}`,
+            Accept: 'application/json',
+        },
+    });
+    
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`CNB 删除图片失败(HTTP ${resp.status})${text.slice(0, 200)}`);
+    }
+    
+    return true;
+}
+
+/**
+ * 从 CNB 删除文件(通用文件)
+ * @param {Object} opts
+ * @param {string} opts.repoUrl - CNB_REPO 环境变量
+ * @param {string} opts.token - CNB_TOKEN 环境变量
+ * @param {string} opts.filePath - CNB 存储路径
+ * @returns {Promise<boolean>} 删除是否成功
+ */
+export async function deleteFileFromCnb(opts) {
+    const slug = repoSlug(opts.repoUrl);
+    // 使用删除文件接口: DELETE /{repo}/-/files/{filePath}
+    const deleteUrl = `https://api.cnb.cool/${slug}/-/files/${encodeURIComponent(opts.filePath)}`;
+    
+    const resp = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: {
+            Authorization: `Bearer ${opts.token}`,
+            Accept: 'application/json',
+        },
+    });
+    
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`CNB 删除文件失败(HTTP ${resp.status})${text.slice(0, 200)}`);
+    }
+    
+    return true;
+}

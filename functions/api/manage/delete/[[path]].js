@@ -5,6 +5,7 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { DiscordAPI } from '../../../utils/storage/discordAPI.js';
 import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
 import { WebDAVAPI } from '../../../utils/storage/webdavAPI.js';
+import { deleteImageFromCnb } from '../../../utils/storage/cnbAPI.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
@@ -168,6 +169,11 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
             await deleteWebDAVFile(env, img);
         }
 
+        // CNB 渠道的图片，需要删除 CNB 中对应的图片
+        if (img.metadata?.Channel === 'CNB') {
+            await deleteCnbFile(env, img);
+        }
+
         // 删除数据库中的记录
         // 注意：容量统计现在由索引自动维护，删除文件后索引更新时会自动重新计算
         await db.delete(fileId);
@@ -292,6 +298,57 @@ async function deleteWebDAVFile(env, img) {
         return await webdavAPI.deleteFile(filePath);
     } catch (error) {
         console.error("WebDAV Delete Failed:", error);
+        return false;
+    }
+}
+
+// 删除 CNB 渠道的图片
+async function deleteCnbFile(env, img) {
+    const filePath = img.metadata?.CnbFilePath;
+    const channelName = img.metadata?.ChannelName;
+
+    if (!filePath) {
+        console.warn('CNB file missing CnbFilePath metadata for deletion');
+        return false;
+    }
+
+    try {
+        const db = getDatabase(env);
+        const settingsKV = await db.get('settings');
+        
+        // 优先使用网页后台配置的 CNB 渠道（与上传逻辑一致）
+        let cnbToken = null;
+        let cnbRepo = null;
+        
+        if (settingsKV?.value?.cnb?.channels && settingsKV.value.cnb.channels.length > 0) {
+            let cnbChannel;
+            if (channelName) {
+                cnbChannel = settingsKV.value.cnb.channels.find(ch => ch.name === channelName);
+            }
+            if (!cnbChannel) {
+                cnbChannel = settingsKV.value.cnb.channels[0];
+            }
+            cnbToken = cnbChannel?.token;
+            cnbRepo = cnbChannel?.repoUrl;
+        }
+        
+        // 回退到环境变量
+        cnbToken = cnbToken || env.CNB_TOKEN;
+        cnbRepo = cnbRepo || env.CNB_REPO;
+        
+        if (!cnbToken || !cnbRepo) {
+            console.warn('CNB channel config not found for deletion');
+            return false;
+        }
+
+        const { deleteImageFromCnb } = await import('../../../utils/storage/cnbAPI.js');
+        return await deleteImageFromCnb({
+            repoUrl: cnbRepo,
+            token: cnbToken,
+            filePath: filePath,
+        });
+    } catch (error) {
+        console.error("CNB Delete Failed:", error);
         return false;
     }
 }
