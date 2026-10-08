@@ -258,7 +258,7 @@ async function processFileUpload(context, formdata = null) {
         }
     } else if (uploadChannel === 'CNB') {
         // ----------------CNB 渠道----------------
-        const res = await uploadFileToCnb(context, fullId, metadata, returnLink);
+        const res = await uploadFileToCnbChannel(context, fullId, metadata, returnLink);
         return res;
     } else if (uploadChannel === 'External') {
         // --------------------外链渠道----------------------
@@ -563,7 +563,7 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
 
 
 // CNB 渠道(搬运自用户 my-app 项目,仅上传;优先读网页后台渠道配置,环境变量作兜底)
-async function uploadFileToCnb(context, fullId, metadata, returnLink) {
+async function uploadFileToCnbChannel(context, fullId, metadata, returnLink) {
     const { env, waitUntil, formdata, uploadConfig, specifiedChannelName } = context;
     const db = getDatabase(env);
 
