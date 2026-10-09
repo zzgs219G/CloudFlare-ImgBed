@@ -9,7 +9,18 @@
 - **API 基础地址**: `https://api.cnb.cool`
 - **认证方式**: Bearer Token (`Authorization: Bearer {CNB_TOKEN}`)
 - **仓库标识**: 从 `CNB_REPO` 解析，如 `https://cnb.cool/zzgs219/cdn-img.git` → `zzgs219/cdn-img`
-- **参考文档**: https://api.cnb.cool/swagger.json (operationId: UploadImgs, UploadFiles, DeleteImg, DeleteFile, DeleteAsset)
+- **参考文档**: https://api.cnb.cool/swagger.json (operationId: UploadImgs, UploadFiles, DeleteRepoImgs, DeleteRepoFiles, DeleteAsset)
+
+### Token 所需权限（重要）
+
+| 操作 | 接口 | 所需权限 |
+|------|------|---------|
+| 上传图片 | `POST /{repo}/-/upload/imgs` | `repo-code:rw` |
+| 上传文件 | `POST /{repo}/-/upload/files` | `repo-notes:rw` |
+| 删除图片 | `DELETE /{repo}/-/imgs/{imgPath}` | **`repo-manage:rw`** |
+| 删除文件 | `DELETE /{repo}/-/files/{filePath}` | **`repo-manage:rw`** |
+
+> ⚠️ 删除权限与上传权限不同。Token 必须勾选 `repo-manage:rw`，否则删除返回 403。
 
 ---
 
@@ -69,11 +80,12 @@ Authorization: Bearer xxx
 Content-Type: application/json
 { "name": "archive.zip", "size": 2048000 }
 
-# 响应结构一致
+# 响应结构一致（dto.UploadAssetsResponse）
 {
   "upload_url": "https://oss.cnb.cool/...",
   "form": { "key": "xxx", "policy": "xxx", ... },
-  "assets": { "path": "zzgs219/cdn-img/uuid.webp" }
+  "token": "xxx",  # confirm 接口用，当前未使用
+  "assets": { "path": "/zzgs219/cdn-img/-/assets/xxx/xxx/uuid.webp" }
 }
 
 # ② 上传文件
@@ -81,8 +93,8 @@ PUT https://oss.cnb.cool/...
 Content-Type: image/webp  # 或 application/zip 等
 <binary data>
 
-# ③ 公开访问 URL
-https://cnb.cool/zzgs219/cdn-img/zzgs219/cdn-img/uuid.webp
+# ③ 公开访问 URL（assets.path 已含完整路径，直接拼站点 origin）
+https://cnb.cool/zzgs219/cdn-img/-/assets/xxx/xxx/uuid.webp
 ```
 
 ### 存储的元数据
@@ -91,8 +103,8 @@ https://cnb.cool/zzgs219/cdn-img/zzgs219/cdn-img/uuid.webp
 ```javascript
 metadata.Channel = "CNB";
 metadata.ChannelName = "渠道名称";  // 如 "CNB_env" 或后台配置的 name
-metadata.CnbFilePath = "zzgs219/cdn-img/uuid.webp";  // assets.path，用于删除
-metadata.CnbUrl = "https://cnb.cool/zzgs219/cdn-img/...";  // 公开直链
+metadata.CnbFilePath = "/zzgs219/cdn-img/-/assets/xxx/xxx/uuid.webp";  // assets.path 原始值，用于删除
+metadata.CnbUrl = "https://cnb.cool/zzgs219/cdn-img/-/assets/...";  // 公开直链
 metadata.FileType = "image/webp";  // 原始 MIME 类型，用于删除时选接口
 ```
 
@@ -124,26 +136,33 @@ else if (uploadMode === 'file') isImage = false; // 强制文件接口
 
 | 文件类型 | 接口 | 说明 |
 |----------|------|------|
-| 图片 (`image/*`) | `DELETE /{repo}/-/imgs/{imgPath}` | 图片专用删除 |
-| 非图片 | `DELETE /{repo}/-/files/{filePath}` | 通用文件删除 |
+| 图片 (`image/*`) | `DELETE /{repo}/-/imgs/{imgPath}` | 图片专用删除（DeleteRepoImgs） |
+| 非图片 | `DELETE /{repo}/-/files/{filePath}` | 通用文件删除（DeleteRepoFiles） |
 
-### 参数
+### 参数（swagger 原文定义）
 
-| 参数 | 来源 | 说明 |
+| 参数 | 格式 | 说明 |
 |------|------|------|
-| `repo` | CNB_REPO 解析 | 如 `zzgs219/cdn-img` |
-| `imgPath` / `filePath` | metadata.CnbFilePath | 如 `zzgs219/cdn-img/uuid.webp` |
+| `repo` | `组织名称/仓库名称`（不带 .git） | 如 `zzgs219/cdn-img` |
+| `imgPath` | **访问链接中 `/-/imgs/` 之后的部分** | 链接 `https://cnb.cool/{repo}/-/imgs/abc/123.png` → `abc/123.png` |
+| `filePath` | **访问链接中 `/-/files/` 之后的部分** | 链接 `https://cnb.cool/{repo}/-/files/abc/123/test.zip` → `abc/123/test.zip` |
+
+> ⚠️ **路径转换是删除的关键**：metadata 里存的 `CnbFilePath` 是上传返回的 `assets.path`（形如 `/{slug}/-/assets/xxx/xxx/uuid.png`），删除时必须剥离 `/{slug}/-/assets/` 前缀，取**之后的相对路径**作为 imgPath/filePath。
+> 代码由 `extractDeletePath()` 统一处理（兼容 `/-/assets/`、`/-/imgs/`、`/-/files/` 及纯 slug 前缀四种格式）。
 
 ### 请求示例
 
 ```bash
+# metadata.CnbFilePath = /zzgs219/cdn-img/-/assets/2025/10/uuid.png
+# 提取相对路径: 2025/10/uuid.png
+
 # 删除图片
-DELETE https://api.cnb.cool/zzgs219/cdn-img/-/imgs/zzgs219/cdn-img/uuid.webp
+DELETE https://api.cnb.cool/zzgs219/cdn-img/-/imgs/2025/10/uuid.png
 Authorization: Bearer xxx
 Accept: application/json
 
-# 删除通用文件
-DELETE https://api.cnb.cool/zzgs219/cdn-img/-/files/zzgs219/cdn-img/archive.zip
+# 删除通用文件（同理提取 /-/assets/ 之后的部分）
+DELETE https://api.cnb.cool/zzgs219/cdn-img/-/files/2025/10/archive.zip
 Authorization: Bearer xxx
 Accept: application/json
 ```
@@ -151,11 +170,13 @@ Accept: application/json
 ### 代码实现位置
 
 - **API 封装**: `functions/utils/storage/cnbAPI.js`
+  - `extractDeletePath()` - 从 CnbFilePath 提取删除所需的相对路径
+  - `encodeAssetPath()` - 按路径段编码（保留 `/` 分隔符）
   - `uploadImageToCnb()` - 图片上传
   - `uploadFileToCnb()` - 通用文件上传
   - `deleteImageFromCnb()` - 图片删除
   - `deleteFileFromCnb()` - 通用文件删除
-- **上传分发**: `functions/upload/index.js` → `uploadFileToCnb()` 根据 `FileType` 自动选择
+- **上传分发**: `functions/upload/index.js` → `uploadFileToCnbChannel()` 根据 `uploadMode` + `FileType` 自动选择
 - **删除分发**: `functions/api/manage/delete/[[path]].js` → `deleteCnbFile()` 根据 `FileType` 自动选择
 
 ---
@@ -198,5 +219,6 @@ DELETE /{repo}/-/assets/{assetID}
 
 ## 更新记录
 
+- 2025-10-09（二）：修复删除路径提取——`assets.path` 实际含 `/-/assets/` 标记（swagger 实测确认），新增 `extractDeletePath()` 剥离前缀；修正本文档路径格式与删除示例；补充权限说明（删除需 `repo-manage:rw`）
 - 2025-10-09：新增通用文件上传/删除支持（`uploadFileToCnb`、`deleteFileFromCnb`），上传/删除自动按 `FileType` 分发
 - 2025-10-08：新增删除图片接口对接（`deleteImageFromCnb` + `deleteCnbFile`）
