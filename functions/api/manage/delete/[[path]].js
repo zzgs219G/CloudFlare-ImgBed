@@ -320,7 +320,9 @@ async function deleteCnbFile(env, img) {
 
     try {
         const db = getDatabase(env);
-        const settingsKV = await db.get('manage@sysConfig@upload');
+        // db.get 返回 JSON 字符串，必须先解析（与 getUploadConfig 逻辑一致）
+        const settingsStr = await db.get('manage@sysConfig@upload');
+        const settingsKV = settingsStr ? JSON.parse(settingsStr) : {};
         
         // 优先使用网页后台配置的 CNB 渠道（与上传逻辑一致）
         let cnbToken = null;
