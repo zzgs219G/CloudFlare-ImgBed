@@ -152,16 +152,17 @@ export async function uploadImageToCnb(opts) {
  * CNB 删除接口要求传「访问链接中 /-/imgs/ 或 /-/files/ 之后的部分」
  * 参考: https://api.cnb.cool swagger - DeleteRepoImgs / DeleteRepoFiles
  *   示例: 链接 https://cnb.cool/{repo}/-/imgs/abc/123.png → imgPath = abc/123.png
- * assets.path 形如 `{repo}/abc/123.png`（含 repo 前缀），需去掉
+ * swagger 定义 assets.path 形如 /{slug}/-/assets/xxx/xxx/xxxx.png
+ *   （/-/assets/ 之后的相对路径即 imgs/files 访问链接的相对路径）
  */
 function extractDeletePath(fullPath, slug) {
     let p = (fullPath || '').replace(/^\/+/, '');
-    // 已含 /-/imgs/ 或 /-/files/ 标记 → 取标记之后的部分
-    for (const marker of ['/-/imgs/', '/-/files/']) {
+    // 依次匹配 /-/assets/、/-/imgs/、/-/files/ 标记 → 取标记之后的部分
+    for (const marker of ['/-/assets/', '/-/imgs/', '/-/files/']) {
         const idx = p.indexOf(marker);
         if (idx !== -1) return p.slice(idx + marker.length);
     }
-    // 否则去掉 repo slug 前缀（org/repo）
+    // 兜底：去掉 repo slug 前缀（org/repo）
     const prefix = `${slug}/`;
     if (p.startsWith(prefix)) return p.slice(prefix.length);
     return p;
@@ -185,6 +186,7 @@ export async function deleteImageFromCnb(opts) {
     const imgPath = extractDeletePath(opts.filePath, slug);
     // 删除接口: DELETE /{repo}/-/imgs/{imgPath}
     const deleteUrl = `https://api.cnb.cool/${slug}/-/imgs/${encodeAssetPath(imgPath)}`;
+    console.log('CNB delete imgs URL:', deleteUrl);
     
     const resp = await fetch(deleteUrl, {
         method: 'DELETE',
@@ -196,7 +198,7 @@ export async function deleteImageFromCnb(opts) {
     
     if (!resp.ok) {
         const text = await resp.text().catch(() => '');
-        throw new Error(`CNB 删除图片失败(HTTP ${resp.status})${text.slice(0, 200)}`);
+        throw new Error(`CNB 删除图片失败(HTTP ${resp.status}) URL: ${deleteUrl} 响应: ${text.slice(0, 200)}`);
     }
     
     return true;
@@ -215,6 +217,7 @@ export async function deleteFileFromCnb(opts) {
     const filePath = extractDeletePath(opts.filePath, slug);
     // 删除接口: DELETE /{repo}/-/files/{filePath}
     const deleteUrl = `https://api.cnb.cool/${slug}/-/files/${encodeAssetPath(filePath)}`;
+    console.log('CNB delete files URL:', deleteUrl);
     
     const resp = await fetch(deleteUrl, {
         method: 'DELETE',
@@ -226,7 +229,7 @@ export async function deleteFileFromCnb(opts) {
     
     if (!resp.ok) {
         const text = await resp.text().catch(() => '');
-        throw new Error(`CNB 删除文件失败(HTTP ${resp.status})${text.slice(0, 200)}`);
+        throw new Error(`CNB 删除文件失败(HTTP ${resp.status}) URL: ${deleteUrl} 响应: ${text.slice(0, 200)}`);
     }
     
     return true;
