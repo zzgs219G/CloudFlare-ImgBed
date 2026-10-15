@@ -11,7 +11,7 @@ import { TelegramAPI } from "../utils/storage/telegramAPI";
 import { DiscordAPI } from "../utils/storage/discordAPI";
 import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
 import { WebDAVAPI } from "../utils/storage/webdavAPI";
-import { uploadImageToCnb, uploadFileToCnb, deleteImageFromCnb } from "../utils/storage/cnbAPI";
+import { uploadImageToCnb, uploadFileToCnb, deleteImageFromCnb, cnbSizeLimit } from "../utils/storage/cnbAPI";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 
@@ -587,7 +587,6 @@ async function uploadFileToCnbChannel(context, fullId, metadata, returnLink) {
     }
 
     const file = formdata.get('file');
-    const fileContent = new Uint8Array(await file.arrayBuffer());
     const contentType = metadata.FileType || file.type || 'application/octet-stream';
     const isImageAuto = contentType.startsWith('image/');
 
@@ -596,6 +595,18 @@ async function uploadFileToCnbChannel(context, fullId, metadata, returnLink) {
     let isImage = isImageAuto;
     if (uploadMode === 'image') isImage = true;
     else if (uploadMode === 'file') isImage = false;
+
+    // 先按 CNB 服务端硬限制拦截，避免把超大文件整体读进内存后才被拒
+    const sizeLimit = cnbSizeLimit(isImage);
+    if (file.size > sizeLimit) {
+        const limitLabel = isImage ? '25MiB(图片接口)' : '64MiB(文件接口)';
+        return createResponse(
+            `Error: File size ${file.size} bytes exceeds CNB limit ${sizeLimit} bytes (${limitLabel})`,
+            { status: 413 }
+        );
+    }
+
+    const fileContent = new Uint8Array(await file.arrayBuffer());
 
     try {
         // 根据文件类型/配置选择上传接口：图片走 /upload/imgs，其他走 /upload/files

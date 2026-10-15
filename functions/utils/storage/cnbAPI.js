@@ -19,6 +19,20 @@ function repoSlug(repoUrl) {
     return m[1];
 }
 
+/**
+ * CNB 服务端上传大小硬限制（实测 value，超出返回 errcode 10401）
+ *   /-/upload/imgs  → 25 MiB
+ *   /-/upload/files → 64 MiB
+ * 说明：CNB 未提供分片上传接口，超出即无法上传，只能在本地提前拦截。
+ */
+export const CNB_MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+export const CNB_MAX_FILE_BYTES = 64 * 1024 * 1024;
+
+/** 按是否为图片返回对应的 CNB 大小上限（字节） */
+export function cnbSizeLimit(isImage) {
+    return isImage ? CNB_MAX_IMAGE_BYTES : CNB_MAX_FILE_BYTES;
+}
+
 /** https://cnb.cool/zzgs219/cdn-img.git → https://cnb.cool/zzgs219/cdn-img */
 function repoPage(repoUrl) {
     return repoUrl.replace(/\.git$/, '');
